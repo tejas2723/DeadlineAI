@@ -1,0 +1,25 @@
+# Ignore local dependencies
+node_modules/
+**/node_modules/
+
+# Ignore production builds
+frontend/build/
+**/build/
+**/dist/
+
+# Ignore local configuration and secrets
+.env
+.env.*
+**/.env
+**/.env.local
+**/.env.development
+**/.env.production
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+*.log
+
+# Ignore IDE files
+.vscode/
+.idea/

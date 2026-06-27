@@ -14,30 +14,65 @@ const Navbar = ({ onMenuToggle, pageTitle }) => {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [overdueCount, setOverdueCount] = useState(0);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
 
   const dropdownRef = useRef(null);
+  const notificationRef = useRef(null);
 
-  // Fetch task stats periodically to update the notification bell overdue badge
+  // Fetch tasks to construct active alerts/notifications (overdue & nearing deadline)
   useEffect(() => {
-    const fetchOverdueCount = async () => {
+    const fetchNotifications = async () => {
       try {
-        const res = await api.get('/tasks/stats');
-        setOverdueCount(res.data.overdue || 0);
+        const res = await api.get('/tasks?sort=deadline&limit=20');
+        if (res.data && res.data.tasks) {
+          const activeTasks = res.data.tasks.filter(t => t.status !== 'completed');
+          const now = new Date();
+          
+          const alerts = activeTasks.map(t => {
+            const deadlineDate = new Date(t.deadline);
+            const daysLeft = (deadlineDate - now) / (1000 * 60 * 60 * 24);
+            
+            if (daysLeft < 0) {
+              return {
+                id: t._id,
+                type: 'error',
+                text: `"${t.title}" is overdue!`,
+                subtext: `Was due on ${deadlineDate.toLocaleDateString()}`,
+              };
+            } else if (daysLeft <= 1) {
+              return {
+                id: t._id,
+                type: 'warning',
+                text: `"${t.title}" is due soon`,
+                subtext: `Due in ${Math.max(0, Math.round(daysLeft * 24))} hours`,
+              };
+            }
+            return null;
+          }).filter(Boolean);
+          
+          setNotifications(alerts);
+        }
       } catch (err) {
-        console.error('Navbar failed to load stats context:', err);
+        console.error('Navbar failed to load notifications:', err);
       }
     };
     if (user) {
-      fetchOverdueCount();
+      fetchNotifications();
+      // Poll every 30 seconds to keep alerts fresh
+      const interval = setInterval(fetchNotifications, 30000);
+      return () => clearInterval(interval);
     }
   }, [user]);
 
-  // Click outside listener to dismiss the avatar dropdown
+  // Click outside listener to dismiss dropdowns
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setDropdownOpen(false);
+      }
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setNotificationsOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -94,15 +129,45 @@ const Navbar = ({ onMenuToggle, pageTitle }) => {
         </div>
 
         {/* Notifications Icon (Bell) */}
-        <div className="relative">
-          <button className="relative rounded-full p-1.5 text-gray-500 hover:bg-gray-100 hover:text-slate-900 focus:outline-none transition-colors">
+        <div className="relative" ref={notificationRef}>
+          <button
+            onClick={() => setNotificationsOpen(!notificationsOpen)}
+            className="relative rounded-full p-1.5 text-gray-500 hover:bg-gray-100 hover:text-slate-900 focus:outline-none transition-colors"
+          >
             <Bell className="h-5 w-5" />
-            {overdueCount > 0 && (
+            {notifications.length > 0 && (
               <span className="absolute top-0 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white ring-2 ring-white animate-bounce">
-                {overdueCount}
+                {notifications.length}
               </span>
             )}
           </button>
+
+          {/* Notifications Dropdown */}
+          {notificationsOpen && (
+            <div className="absolute right-0 mt-2 w-72 origin-top-right rounded-lg bg-white py-2 shadow-lg ring-1 ring-black/5 focus:outline-none z-50 border border-slate-100 max-h-96 overflow-y-auto">
+              <div className="border-b border-gray-100 px-4 py-2 flex items-center justify-between">
+                <span className="font-bold text-xs text-slate-800">Alerts & Notifications</span>
+                <span className="text-[10px] text-gray-400">{notifications.length} active</span>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {notifications.length === 0 ? (
+                  <div className="px-4 py-6 text-center text-xs text-gray-400">
+                    🎉 No urgent alerts. Keep up the great work!
+                  </div>
+                ) : (
+                  notifications.map((alert) => (
+                    <div key={alert.id} className="px-4 py-3 hover:bg-slate-50 transition-colors flex items-start gap-2.5">
+                      <span className={`mt-1.5 flex h-2 w-2 shrink-0 rounded-full ${alert.type === 'error' ? 'bg-red-500' : 'bg-amber-500'}`} />
+                      <div className="text-xs">
+                        <p className="font-medium text-slate-850">{alert.text}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{alert.subtext}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* User profile avatar and dropdown */}

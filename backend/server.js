@@ -30,8 +30,13 @@ app.use(cors({
     // Allow same-origin requests or clients like curl/mobile apps with no origin header
     if (!origin) return callback(null, true);
     
-    // Allow localhost, configured FRONTEND_URL, or any Google Cloud Run domain
-    if (origin.endsWith('.run.app') || allowedOrigins.includes(origin)) {
+    // Allow localhost, configured FRONTEND_URL, Google Cloud Run, or Firebase domains
+    if (
+      origin.endsWith('.run.app') || 
+      origin.endsWith('.web.app') || 
+      origin.endsWith('.firebaseapp.com') || 
+      allowedOrigins.includes(origin)
+    ) {
       return callback(null, true);
     }
     
